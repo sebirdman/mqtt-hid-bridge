@@ -1,3 +1,8 @@
+
+#if defined(__GNUC__) && ! defined(_GNU_SOURCE)
+#define _GNU_SOURCE /* needed for (v)asprintf, affects '#include <stdio.h>' */
+#endif
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -70,6 +75,10 @@ static int mqtt_message_arrived(void* context, char* topic_name, int topic_len, 
     return 1;
 }
 
+enum button {
+    DOWN = 0x51
+};
+
 static int mqtt_setup(void) {
     printf("[MQTT] creating...\n");
 
@@ -135,18 +144,33 @@ static void usb_callback(struct libusb_transfer *transfer) {
     if (transfer->actual_length > 0 && 
         transfer->buffer[0] == 0x20 &&
         (transfer->buffer[2] == 0x01 || transfer->buffer[2] == 0x03)) {
-        printf("[USB] Frame ");
+        printf("[USB] Frame \n");
+        char start[] = "{\"data\":[";
+        char end[] = "]}";
+
+        char buf[100];
+
+	memset(&buf, 0x00, 100);
+
         for(int i = 0; i< transfer->actual_length; i++) {
-            printf("%#x ", transfer->buffer[i]);
+            char *data = NULL;
+            if (i == transfer->actual_length - 1) {
+                asprintf(&data, "%s%d", buf, transfer->buffer[i]);
+            } else {
+                asprintf(&data, "%s%d,", buf, transfer->buffer[i]);
+            }
+            strcpy(buf, data);
+            free(data);
         }
-        printf("\n");
+	char *final = NULL;
+        int final_len = asprintf(&final, "%s%s%s", start, buf, end);
 
         if (MQTTAsync_isConnected(mqtt_client)) {
             MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
             MQTTAsync_message pubmsg = MQTTAsync_message_initializer;
             opts.context = mqtt_client;
-            pubmsg.payload = transfer->buffer;
-            pubmsg.payloadlen = transfer->actual_length;
+            pubmsg.payload = final;
+            pubmsg.payloadlen = final_len;
             pubmsg.qos = MQTT_QOS;
             pubmsg.retained = 0;
 
@@ -157,6 +181,7 @@ static void usb_callback(struct libusb_transfer *transfer) {
         } else {
             printf("[USB] Received frame, but MQTT is not connected\n");
         }
+        free(final);
     }
 
     int rc = libusb_submit_transfer(transfer);
