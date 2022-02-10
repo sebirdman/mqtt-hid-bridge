@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <inttypes.h>
 #include <unistd.h>
@@ -75,9 +76,6 @@ static int mqtt_message_arrived(void* context, char* topic_name, int topic_len, 
     return 1;
 }
 
-enum button {
-    DOWN = 0x51
-};
 
 static int mqtt_setup(void) {
     printf("[MQTT] creating...\n");
@@ -137,6 +135,163 @@ static int mqtt_teardown(void) {
     return 0;
 }
 
+static void get_button_name(int button, char *name) {
+
+    switch(button) {
+    case 0:
+        strcpy(name, "NONE");
+        return;
+    case 79:
+        strcpy(name, "RIGHT");
+        return;
+    case 80:
+        strcpy(name, "LEFT");
+        return;
+    case 81:
+        strcpy(name, "DOWN");
+        return;
+    case 82:
+        strcpy(name, "UP");
+        return;
+    case 59393:
+        strcpy(name, "MUSIC");
+        return;
+    case 59649:
+        strcpy(name, "CINEMA");
+        return;
+    case 60417:
+        strcpy(name, "POWER");
+        return;
+    case 60673:
+        strcpy(name, "TV");
+        return;
+    case 61967:
+        strcpy(name, "IOT_TOP_LIGHT");
+        return;
+    case 61455:
+        strcpy(name, "IOT_PLUS");
+        return;
+    case 61711:
+        strcpy(name, "IOT_MINUS");
+        return;
+    case 62223:
+        strcpy(name, "IOT_BOTTOM_LIGHT");
+        return;
+    case 62479:
+        strcpy(name, "IOT_TOP_PLUG");
+        return;
+    case 62735:
+        strcpy(name, "IOT_BOTTOM_PLUG");
+        return;
+    case 62977:
+        strcpy(name, "GREEN");
+        return;
+    case 63233:
+        strcpy(name, "RED");
+        return;
+    case 62721:
+        strcpy(name, "YELLOW");
+        return;
+    case 62465:
+        strcpy(name, "BLUE");
+        return;
+    case 39424:
+        strcpy(name, "DVR");
+        return;
+    case 36096:
+        strcpy(name, "GUIDE");
+        return;
+    case 65281:
+        strcpy(name, "INFO");
+        return;
+    case 37888:
+        strcpy(name, "EXIT");
+        return;
+    case 101:
+        strcpy(name, "MENU");
+        return;
+    case 59648:
+        strcpy(name, "VOLUME_UP");
+        return;
+    case 59904:
+        strcpy(name, "VOLUME_DOWN");
+        return;
+    case 39936:
+        strcpy(name, "CH_PG_UP");
+        return;
+    case 40192:
+        strcpy(name, "CH_PG_DOWN");
+        return;
+    case 88:
+        strcpy(name, "OK");
+        return;
+    case 57856:
+        strcpy(name, "MUTE");
+        return;
+    case 9218:
+        strcpy(name, "BACK");
+        return;
+    case 46080:
+        strcpy(name, "REWIND");
+        return;
+    case 45824:
+        strcpy(name, "FAST_FORWARD");
+        return;
+    case 45056:
+        strcpy(name, "PLAY");
+        return;
+    case 45312:
+        strcpy(name, "PAUSE");
+        return;
+    case 45568:
+        strcpy(name, "RECORD");
+        return;
+    case 46848:
+        strcpy(name, "STOP");
+        return;
+    case 30:
+        strcpy(name, "ONE");
+        return;
+    case 31:
+        strcpy(name, "TWO");
+        return;
+    case 32:
+        strcpy(name, "THREE");
+        return;
+    case 33:
+        strcpy(name, "FOUR");
+        return;
+    case 34:
+        strcpy(name, "FIVE");
+        return;
+    case 35:
+        strcpy(name, "SIX");
+        return;
+    case 36:
+        strcpy(name, "SEVEN");
+        return;
+    case 37:
+        strcpy(name, "EIGHT");
+        return;
+    case 38:
+        strcpy(name, "NINE");
+        return;
+    case 86:
+        strcpy(name, "DOT_DASH");
+        return;
+    case 39:
+        strcpy(name, "ZERO");
+        return;
+    case 40:
+        strcpy(name, "E");
+        return;
+
+
+    }
+
+    strcpy(name, "UNKNOWN");
+}
+
 /**
  * USB 
  */
@@ -144,32 +299,41 @@ static void usb_callback(struct libusb_transfer *transfer) {
     if (transfer->actual_length > 0 && 
         transfer->buffer[0] == 0x20 &&
         (transfer->buffer[2] == 0x01 || transfer->buffer[2] == 0x03)) {
-        printf("[USB] Frame \n");
-        char start[] = "{\"data\":[";
-        char end[] = "]}";
-
-        char buf[100];
-
-	memset(&buf, 0x00, 100);
-
-        for(int i = 0; i< transfer->actual_length; i++) {
-            char *data = NULL;
-            if (i == transfer->actual_length - 1) {
-                asprintf(&data, "%s%d", buf, transfer->buffer[i]);
-            } else {
-                asprintf(&data, "%s%d,", buf, transfer->buffer[i]);
-            }
-            strcpy(buf, data);
-            free(data);
+        bool is_int16_button = transfer->buffer[2] == 0x03;
+        int first_button = 0;
+        int second_button = 0;
+        int third_button = 0;
+        int fourth_button = 0;
+        if (is_int16_button) {
+            first_button = transfer->buffer[4] | transfer->buffer[3] << 8;
+            second_button = transfer->buffer[6] | transfer->buffer[5] << 8;
+        } else {
+            first_button = transfer->buffer[4];
+            second_button = transfer->buffer[5];
+            third_button = transfer->buffer[6];
+            fourth_button = transfer->buffer[7];
         }
-	char *final = NULL;
-        int final_len = asprintf(&final, "%s%s%s", start, buf, end);
+        printf("[USB] Frame first %i, second %i, third %i\n", first_button, second_button, third_button);
+
+        char *data = NULL;
+	char first_button_name[50];
+	char second_button_name[50];
+	char third_button_name[50];
+	char fourth_button_name[50];
+
+        get_button_name(first_button, first_button_name);
+        get_button_name(second_button, second_button_name);
+        get_button_name(third_button, third_button_name);
+        get_button_name(fourth_button, fourth_button_name);
+
+        int final_len = asprintf(&data, "{\"button_one\":\"%s\",\"button_two\":\"%s\",\"button_three\":\"%s\",\"button_four\":\"%s\"}", first_button_name, second_button_name, third_button_name, fourth_button_name);
+        printf("FINAL %s\n", data);
 
         if (MQTTAsync_isConnected(mqtt_client)) {
             MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
             MQTTAsync_message pubmsg = MQTTAsync_message_initializer;
             opts.context = mqtt_client;
-            pubmsg.payload = final;
+            pubmsg.payload = data;
             pubmsg.payloadlen = final_len;
             pubmsg.qos = MQTT_QOS;
             pubmsg.retained = 0;
@@ -181,7 +345,7 @@ static void usb_callback(struct libusb_transfer *transfer) {
         } else {
             printf("[USB] Received frame, but MQTT is not connected\n");
         }
-        free(final);
+        free(data);
     }
 
     int rc = libusb_submit_transfer(transfer);
